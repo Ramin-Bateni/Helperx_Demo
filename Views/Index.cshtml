@@ -1,0 +1,1571 @@
+﻿@using System.Linq
+@using Helperx.Common
+@using Helperx.Common.Helpers
+@using Helperx.Common.Helpers.Extentions
+@using Helperx.DomainClasses.Entities.Common.Enums
+@using Helperx.Resource
+@using Helperx.Utility
+@model Helperx.ViewModel.Areas.ControlPanel.Posts.BrandSelectList_ToSchedulingContentViewModel
+@{
+    ViewBag.Title = @Lang.PageTitle_Planner;
+    var isRtl = CultureHelper.IsRighToLeft();
+    var side = isRtl ? "right" : "left";
+    var selectedBrand = @Model.AccessedBrands.FirstOrDefault(x => x.BrandGuid == @Model.SelectedBrandGuid);
+    var usePersionCalendar = (User.GetCalendar()==HxCalendars.Cal_Persian).ToString().ToLower();
+    var miladiDtformat = "dddd DD MMMM YYYY _ HH:mm";
+    var persianDtFormat = "dddd DD MMMM YYYY ساعت HH:mm";
+    var finalDtFormat = usePersionCalendar!="true" ? miladiDtformat: persianDtFormat;
+    var finalEnNumber = usePersionCalendar != "true" ? "true" : "false";
+    var adminMode = false;
+}
+
+@if (adminMode){
+    <div class="row hide" style="width: 90%; max-width: 800px; margin: 0 auto;">
+        <div class="col-md-6">
+            <button id="BtnCpVisibility" class="btn-block" style="display: inline-block;">Show Data</button>
+        </div>
+        <div class="col-md-6  hide">
+            <button id="BtnLoadLightData" class="btn-block" style="display: inline-block;">Load Light Data</button>
+            <button id="BtnLoadHeavyData" class="" style="width: 29%; display: inline-block;">Load Heavy Data</button>
+        </div>
+    </div>
+    <div id="Cp" class="row" style="display: none; width: 90%; max-width: 800px; margin: 0 auto;">
+        <div class="box">
+            <div class="boxtitle">Data:</div>
+            <div class="inner-box">
+                <pre style="font-size: 10px; direction: ltr; text-align: left;" id="JsonViewerForData"></pre>
+            </div>
+        </div>
+        <div class="box hide">
+            <div class="boxtitle">Add Content</div>
+            <div class="inner-box">
+                <textarea style="font-size: 11px;" rows="2" cols="80" id="TextAreaAddContent">{"dt":"16/01/2016T10:15","index":1,"body":{"id":18,"title":"new item"}}</textarea><br>
+                <button id="BtnAddContent">Add Content By Data</button>
+                <button id="BtnRemoveContent">Remove Content index:</button> <input id="RemoveContentIndex" type="text" value="1"><br>
+                Modified contentpack Info:
+                <div id="ModifiedContentActivity" style="color: red; float: right"></div>
+                <textarea style="font-size: 11px;" rows="1" cols="80" id="ModifiedContentData"></textarea>
+            </div>
+        </div>
+        <div class="box hide" style="text-align: center;">
+            <div class="inner-box">
+                <button id="BtnGotoEvent" data-target='#NsSchedulerElm'>Goto Event</button> <input id="GoTimeSelector" type="text" value="16/01/2016T10:15"><br>
+            </div>
+        </div>
+        <div class="box hide">
+            <div class="inner-box" style="text-align: center;">
+                <input id="EventSelector" type="text" value="16/01/2016T10:15"><br>
+                <button id="BtnAddEvent100">Add Event</button>
+                <button id="BtnRemoveEvent">Remove Event</button><br>
+            </div>
+        </div>
+        <div class="box hide">
+            <div class="inner-box" style="text-align: center;">
+                <button id="BtnGetPrevDt"> Get Prev Dt</button>
+                <button id="BtnGetNextDt">Get Next Dt</button>
+            </div>
+        </div>
+        <div class="box hide">
+            <div class="inner-box" style="text-align: center;">
+                <button id="BtnGetIndexOfContentAtEvent">Get Index Of C2 Content At Its Event</button><br>
+                <button id="BtnGetIndexOfLastContentAtEvent">Get Index Of Last Content At Event:</button><input id="DtForIndexOfLastContentAtEvent" type="text" value="16/01/2016T10:15">
+            </div>
+        </div>
+    </div>
+}
+@if (selectedBrand == null)
+{
+    @Html.Partial(MVC.CP.Brand.Views._SelectBrandOfList,@Model.AccessedBrands)
+}
+else
+{
+    <section Id="NsSchedulerElm" class="ns-sch" style="max-width: 800px; margin: 2em auto; position: relative !important;">
+        <div class="brand-profile-photo">
+            <img class="img-circle" style="" src="@Url.Action(MVC.File.PubPortProfile(selectedBrand.LogoSocialPortGuid.ToString("N"), "s"))" alt="">
+        </div>
+        <div class="sch-toolbar btn-group btn-group-justified">
+            @if (@Model.AccessedBrands != null && @Model.AccessedBrands.Any())
+            {
+                <div id="DdlistBrand" class="btn-group">
+                    <button class="btn grey-cascade dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-delay="1000" data-close-others="true">
+                        <i class="fa fa-diamond" aria-hidden="true"></i>
+                        @(selectedBrand != null ? selectedBrand.Title : Lang.BrandSelector_Ddlist_SelectBrand)
+                        <i class="fa fa-angle-down" style="padding: 0 10px;"></i>
+                    </button>
+                    <ul class="dropdown-menu">
+                        @{
+                            var myselfAccessedBrands = @Model.AccessedBrands.Where(x => x.IsMyselfBrand);
+                            var otherAccessedBrands = @Model.AccessedBrands.Where(x => !x.IsMyselfBrand);
+                        }
+                        @*لیست کردن برندهای خود کاربر*@
+                        @if (myselfAccessedBrands.Any())
+                        {
+                            if (otherAccessedBrands.Any())
+                            {
+                                <li><span class="hx-dropdown-menu-group-title">@Lang.BrandSelector_Ddlist_MyselfBrands</span></li>
+                            }
+                        }
+                        @foreach (var brandItem in myselfAccessedBrands)
+                        {
+                            if (brandItem.ConsumeServiceStatus != ConsumeServiceStatus.AllowdService)
+                            {
+                                // continue;
+                            }
+                            <li>
+                                <a href="@Url.Action(MVC.CP.Planner.Index(brandItem.BrandGuid.ToString("N").ToUpper()))"> @brandItem.Title </a>
+                            </li>
+                        }
+                        @*لیست کردن دیگر برندها*@
+                        @if (otherAccessedBrands.Any())
+                        {
+                            if (myselfAccessedBrands.Any())
+                            {
+                                    @*<li class="divider"> </li>*@
+                                <li><span class="hx-dropdown-menu-group-title">@Lang.BrandSelector_Ddlist_OtherBrands</span></li>
+                            }
+                        }
+                        @foreach (var brandItem in otherAccessedBrands)
+                        {
+                            if (brandItem.ConsumeServiceStatus != ConsumeServiceStatus.AllowdService)
+                            {
+                                continue;
+                            }
+                            <li>
+                                <a href="@Url.Action(MVC.CP.Planner.Index(brandItem.BrandGuid.ToString("N").ToUpper()))"> @brandItem.Title </a>
+                            </li>
+                        }
+
+                    </ul>
+                </div>
+            }
+            <div class="btn violet tooltips hx-violet-tooltip" style="border-color: #817c95; width: .4%; padding: 0; cursor: default;" data-container="body" data-placement="top" data-original-title="@Lang.SchedulingContent_RemainPost_Tooltip" href="javascript:;">
+                <div class="progress hx-brand-remain-post-progress">
+                    <div class="progress-bar hx-bg-color6 pull-right" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%;"></div>
+                    <span class="hx-progress-overlay hide"><span class="hx-progress-overlay-value"></span> @Lang.SchedulingContent_Post_Label</span>
+                </div>
+            </div>
+            <a class="btn btn-success" id="BtnSaveSchedules" href="javascript:;"><i class="fa fa-floppy-o" aria-hidden="true"></i> @Lang.Gnr_Save</a>
+            @*<a id="BtnToday" href="javascript:;" class="btn default">امروز</a>
+            <a id="BtnTommarow" href="javascript:;" class="btn default">فردا</a>*@
+        </div>
+
+        <div class="calendar-box css_button_18 flash-title">
+            <div class="calendar-box-highlight"></div>
+            <div class="calendar-box-inner row">
+                <div class="col-lg-12">
+                    <div class="pull-left event-add-btn-box">
+                        <button id="BtnAddEvent" type="button" class="btn hxred disabled hx-btn-circle btn-lg">
+                            <i class="glyphicon glyphicon-plus"></i>
+                        </button>
+                    </div>
+                    <div class="input-group">
+                        @Html.Editor("FormatedTitleDt", "PersianDatePicker", new
+                        {
+                            @class = "form-control",
+                            style = "",
+                            type = "button",
+                            @readonly = true,
+                            autocomplete = "false",
+                            placeholder = "Click here to select a date and time",
+                            //data_hidetodayfromfooter = "true",
+                            data_groupid = "ScheduleGroup",
+                            data_placement = "bottom",
+                            //data_trigger = "click",
+                            data_enabletimepicker = "true",
+                            data_useserverdt = "true",
+                            data_withoutbox = "true",
+                            //data_fromdate = "true",
+                            data_englishnumber = @finalEnNumber,
+                            data_disabled = "false",
+                            data_mddatetimepicker = "true",
+                            //data_format = "yyyy/MM/dd",
+                            data_mdformat = @finalDtFormat,
+                            data_disablebeforetoday = "false",
+                            //data_limitdateValue = @birthdayToDate
+                        })
+                        @*<input id="FormatedTitleDt" 
+                               class="form-control"
+                               type="button" 
+                               readonly
+                               data-mddatetimepicker="true"
+                               data-targetselector="#FormatedTitleDt" 
+                               data-enabletimepicker="true"
+                               data-placement="bottom" 
+                               data-disablebeforetoday="false" 
+                               @Html.Raw(usePersionCalendar != "true" ? "data-isgregorian=\"true\" data-englishnumber=\"true\"" : "data-isgregorian=\"false\"  data-englishnumber=\"false\"")
+                               data-mdformat="@finalDtFormat">*@
+                        <span class="input-group-addon glyphicon glyphicon-calendar" style="display: table-cell;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="timeline">
+            <button id="BtnRemoveCurrentEvent" title="Remove event">x</button>
+            <div class="events-wrapper">
+                <div class="events">
+                    <ol></ol>
+                    <span class="filling-line" aria-hidden="true"></span>
+                </div>
+            </div>
+            <ul class="ns-timeline-navigation">
+                <li><a href="#0" class="prev inactive">Prev</a></li>
+                <li><a href="#0" class="next">Next</a></li>
+            </ul>
+        </div>
+        <div class="tabbable">
+            <ul class="nav nav-tabs">
+                <li class=""><a data-toggle="tab" href="#ScheduledContentPacks">@Lang.SchedulingContent_ScheduledIems</a></li>
+                <li class="active"><a data-toggle="tab" href="#ContentRepository">@Lang.SchedulingContent_Repository</a></li>
+            </ul>
+            <div class="tab-content">
+                <div id="ContentRepository" class="tab-pane fade in active">
+                    <div class="repository-contentpacks">
+                        <button id="BtnReloadCp" class="btn violet btn-block btn-round-none">@Lang.SchedulingContent_Repository_BtnLoadNewItems</button>
+                        <ol class="contentpack-repository-list"></ol>
+                        <button id="BtnLoadOldCp" class="btn btn-lg hx-btn-circle center-block btn-outline violet hide" style="margin-top: 10px;"><i class="fa fa-angle-double-down" aria-hidden="true"></i></button>
+                    </div>
+                </div>
+                <div id="ScheduledContentPacks" class="tab-pane fade">
+                    <div class="events-contentpack">
+                        <ol></ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <div id="modalLogs" style="display: none;">
+        <div class="mt-element-list">
+            <div class="mt-list-head list-default ext-1 yellow-saffron">
+                <div class="row">
+                    <div class="col-xs-12">
+                        <div class="list-head-title-container">
+                            <h3 class="list-title uppercase sbold">@Lang.Gnr_Log</h3>
+                            <div class="list-date"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-list-container list-default ext-1" style="padding: 0;">
+                <ul class="hx-log-items"></ul>
+            </div>
+        </div>
+    </div>
+}
+@Html.Hidden("CpFounderLabel", @Lang.SchedulingContent_CpFounder)
+@Html.Hidden("PublisherLabel", @Lang.SchedulingContent_Publisher)
+@Html.Hidden("MyselfDisplayName", User.Identity.GetDisplayName())
+@Html.Hidden("isRtl", isRtl)
+@Html.Hidden("Myself", Lang.Gnr_Myself)
+@Html.Hidden("StrError", Lang.Gnr_Error)
+@Html.Hidden("StrReminder", Lang.Gnr_Reminder)
+@Html.Hidden("SchedulingContent_LimitMaxItemReachedForAll", Lang.SchedulingContent_LimitMaxItemReachedForAll)
+@Html.Hidden("SchedulingContent_LimitMaxItemReachedForSome", Lang.SchedulingContent_LimitMaxItemReachedForSome)
+@Html.Hidden("SchedulingContent_ConfirmSelectingEvent_PartA1", Lang.SchedulingContent_ConfirmSelectingEvent_PartA1)
+@Html.Hidden("SchedulingContent_ConfirmSelectingEvent_PartA2", Lang.SchedulingContent_ConfirmSelectingEvent_PartA2)
+@Html.Hidden("SchedulingContent_ConfirmSelectingEvent_PartB1", Lang.SchedulingContent_ConfirmSelectingEvent_PartB1)
+@Html.Hidden("SchedulingContent_Err_TryAddEventOutOfLimit", Lang.SchedulingContent_Err_TryAddEventOutOfLimit)
+@Html.Hidden("SchedulingContent_Err_TryRemoveEventOutOfLimit", Lang.SchedulingContent_Err_TryRemoveEventOutOfLimit)
+@Html.Hidden("SchedulingContent_Err_TryAddContentPackOutOfLimit", Lang.SchedulingContent_Err_TryAddContentPackOutOfLimit)
+@Html.Hidden("SchedulingContent_Err_TryRemoveContentPackOutOfLimit", Lang.SchedulingContent_Err_TryRemoveContentPackOutOfLimit)
+@Html.Hidden("SchedulingContent_Err_TryAddContentPackOutOfLimitMax", Lang.SchedulingContent_Err_TryAddContentPackOutOfLimitMax)
+@Html.Hidden("SchedulingContent_Err_SchedulingForBrandThatHasNotAnyAssignedPorts", Lang.SchedulingContent_Err_SchedulingForBrandThatHasNotAnyAssignedPorts)
+@Html.Hidden("SelectedBrandId", @Model.SelectedBrandGuid?.ToString("N") ?? "")
+@Html.Hidden("UsePersionCalendar", @usePersionCalendar)
+@Html.Hidden("MiladiDtFormat", @miladiDtformat)
+@Html.Hidden("PersianDtFormat", @persianDtFormat)
+@Html.Partial(MVC.Shared.Views._ModalTermsOfServices)
+@Html.Partial(MVC.CP.Shared.Views._ModalWelcome)
+@*<div id="ModalConfirmMoveFromRep2Sch" class="modal fade container" tabindex="-1" aria-hidden="true">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
+        <h4 class="modal-title">تایید درج محتوا در برنامه</h4>
+    </div>
+    <div class="modal-body text-justify" style="margin: 0 25px;">
+        آیا از انتقال <span class="hx-count-of-selected-cps"></span> آیتم در برنامهٔ مورخ <span class="hx-target-sch-date"></span> ساعت <span class="hx-target-sch-time"></span> با تنظیمات زیر مطمئن هستید؟
+        <div class="row">
+            <div class="col-md-12">
+                <input type="checkbox" data-destid="100" class="telegram-switch" data-toggle="toggle" data-size="mini" data-width="70px" data-on="Telegram" data-off="Telegram">
+                <input type="checkbox" data-destid="200" class="facebook-switch" data-toggle="toggle" data-size="mini" data-width="70px" data-on="Facebook" data-off="Facebook">
+                <input type="checkbox" data-destid="300" class="twitter-switch" data-toggle="toggle" data-size="mini" data-width="70px" data-on="Twitter" data-off="Twitter">
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-info">تایید</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">لغو</button>
+    </div>
+</div>*@
+@section Styles_PageLevelPlugins {
+    @if (isRtl)
+    {@Styles.Render(Links.Bundles.Styles.Pages.SchCoRtl.PLUGINS)}
+    else
+    {@Styles.Render(Links.Bundles.Styles.Pages.SchCo.PLUGINS)}
+}
+@section Styles_PageLevelStyles {
+    @if (isRtl)
+    {@Styles.Render(Links.Bundles.Styles.Pages.SchCoRtl.STYLES)}
+    else
+    {@Styles.Render(Links.Bundles.Styles.Pages.SchCo.STYLES)}
+    <style type="text/css">
+       .emoji {
+            width: 16px;
+        }
+        .hx-buy-package {
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .img-circle {
+            border-radius: 50%;
+            width: 100%;
+            height: 100%;
+        }
+        .brand-profile-photo {
+            border-radius: 50%;
+            box-shadow: 0 0px 0px 4px #95a5a6;
+            width: 40px;
+            height: 40px;
+            overflow: hidden;
+            display: inline-block;
+            position: absolute;
+            z-index: 10;
+            right: 31px;
+            top: -10px;
+        }
+        .ns-sch {
+            position: relative;
+        }
+       .mt-element-list .list-default.mt-list-container ul>.mt-list-item>.list-item-content {
+           padding: 0 60px 0 20px;
+           text-align: justify;
+       }
+       .mt-element-list .list-default.mt-list-head.yellow-saffron .list-date, .mt-element-list .list-default.mt-list-head.yellow-saffron .list-label {
+           color: #615b90;
+           font-size: 10px;
+           font-weight: 500;
+       }
+       .mt-element-list .list-default.mt-list-head.yellow-saffron {
+           background-color: #151e3c;
+           color: rgb(75, 72, 109);
+       }
+       .mt-element-list .list-default.ext-1.mt-list-container ul>.mt-list-item>.list-icon-container {
+           color: #9898b1;
+       }
+       .mt-element-list .list-default.ext-1.mt-list-container ul>.mt-list-item:hover,
+       .mt-element-list .list-default.ext-1.mt-list-container ul>.mt-list-item.done:hover {
+           background-color: transparent;
+       }
+       @@media (max-width: 767px){
+         .brand-profile-photo {
+             right: 1%;
+             top: 3px;    
+        }
+       }
+    </style>
+}
+@section Scripts_PageLevelPlugins {
+    @*@Scripts.Render(Links.Bundles.Scripts.COMMON_PLUGINS)*@
+    @Scripts.Render(Links.Bundles.Scripts.Pages.SchCo.PLUGINS)
+}
+@section Scripts_PageLevelScripts {
+        @Scripts.Render(Links.Bundles.Scripts.Pages.SchCo.SCRIPTS)
+        <script src="@Html.ThisPageJsVirtualPath()"></script>
+        <script src="http://twemoji.maxcdn.com/2/twemoji.min.js?2.4"></script>
+}
+@section Scripts_PageLevelExtend{
+    @{
+    Html.RenderToJsCacheFile(
+            @<text>
+                <script>
+                    $(window).resize(function() {
+                        if ($(".popover").is(":visible")) {
+                            var popover = $(".popover");
+                            var $element = $(popover.context.activeElement);
+                            popover.addClass("hx-no-transition");
+                            $element.popover('show');
+                            popover.removeClass("hx-no-transition");
+                        }
+                    });
+                    @*$(document).ready(function() {
+                                             var loadurl = '@Url.Action(@MVC.CP.ContentPack.Actions.ContentPackList())';
+                                             $.get(loadurl, function(data) {
+                                                 //    $("<pre id='#CpList' style='direction:ltr;'>").text(JSON.stringify(data, null, 4)).insertBefore($('#NsSchedulerElm'));
+                                             });
+                                         });*@
+                </script>
+                @*@Html.Action(MVC.CP.Content.ContentList())*@
+
+                <script>
+                    //console.clear();
+                    $.ajaxSetup({ cache: false });
+                    // میکرو پلاگین زیر که به ما کمک میکنه تا متن داخل یک المان رو با ایگنور کردن برخی المانهای داخلش برداریم
+                    // http://stackoverflow.com/questions/11347779/jquery-exclude-children-from-text
+                    $.fn.ignore = function(sel) {
+                        return this.clone().find(sel || ">*").remove().end();
+                    };
+
+                    function capitalizeFirstLetter(str) {
+                        return !str || str.length == 0 ? "" : str.charAt(0).toUpperCase() + str.slice(1);
+                    }
+
+                    var
+                        _,
+                        $nsSchedulerElm,
+                        strCpFounderLabel,
+                        strPublisherLabel,
+                        myselfDisplayName,
+                        myself,
+                        $repList,
+                        selectedBrandId,
+                        $modalConfirmMoveFromRep2Sch,
+                        repositoryId = '#ContentRepository',
+                        nsSchedulerElmId = '#NsSchedulerElm',
+                        btnReloadRepositoryId = '#BtnReloadCp',
+                        btnLoadOldRepositoryId = '#BtnLoadOldCp',
+                        urGetNewCpsOfRepository = '@Url.Action(@MVC.CP.ContentPack.ContentPackList())',
+                        urLoadSechduledContents = "@Url.Action(@MVC.CP.Planner.LoadSechduledContents())",
+                        urSaveSechduledContents = "@Url.Action(@MVC.CP.Planner.SaveScheduledContacts())",
+                        socialNetworkSwitches = [],
+                        strError = '',
+                        strReminder = '',
+                        SchedulingContent_Err_SchedulingForBrandThatHasNotAnyAssignedPorts = '',
+                        isRtl=false;
+
+                    var emoji=function(input) {
+                        try {
+                            return twemoji.parse.apply(this, arguments);
+                        } catch (e) {
+                            return input;
+                        }
+                    }
+
+                    $(document).ready(function() {
+                        var $btnToday = $('#BtnToday'),
+                            $btnTomarrow = $('#BtnTomarrow'),
+                            $btnSaveSchedules = $('#BtnSaveSchedules'),
+                            usePersianDt = $("#UsePersionCalendar").val() == 'true',
+                            persianDtFormat = $('#PersianDtFormat').val(),
+                            miladiDtFormat = $('#MiladiDtFormat').val(),
+                            dtFormat = usePersianDt ? persianDtFormat : miladiDtFormat,
+                            firstShowRepository = true,
+                            isRtl = $('#isRtl').val() == "True" ? true : false,
+                            strSchedulingContent_LimitMaxItemReachedForAll = $('#SchedulingContent_LimitMaxItemReachedForAll').val(),
+                            strSchedulingContent_LimitMaxItemReachedForSome = $('#SchedulingContent_LimitMaxItemReachedForSome').val(),
+                            schedulingContent_ConfirmSelectingEvent_PartA1 = $('#SchedulingContent_ConfirmSelectingEvent_PartA1').val(),
+                            schedulingContent_ConfirmSelectingEvent_PartA2 = $('#SchedulingContent_ConfirmSelectingEvent_PartA2').val(),
+                            schedulingContent_ConfirmSelectingEvent_PartB1 = $('#SchedulingContent_ConfirmSelectingEvent_PartB1').val(),
+                            schedulingContent_Err_TryAddEventOutOfLimit = $("#SchedulingContent_Err_TryAddEventOutOfLimit").val(),
+                            schedulingContent_Err_TryRemoveEventOutOfLimit = $("#SchedulingContent_Err_TryRemoveEventOutOfLimit").val(),
+                            schedulingContent_Err_TryAddContentPackOutOfLimit = $("#SchedulingContent_Err_TryAddContentPackOutOfLimit").val(),
+                            SchedulingContent_Err_TryRemoveContentPackOutOfLimit = $("#SchedulingContent_Err_TryRemoveContentPackOutOfLimit").val(),
+                            SchedulingContent_Err_TryAddContentPackOutOfLimitMax = $("#SchedulingContent_Err_TryAddContentPackOutOfLimitMax").val();
+
+                        _ = hx.n;
+                        strError = $('#StrError').val();
+                        strReminder = $('#StrReminder').val();
+                        SchedulingContent_Err_SchedulingForBrandThatHasNotAnyAssignedPorts = $('#SchedulingContent_Err_SchedulingForBrandThatHasNotAnyAssignedPorts').val();
+                        //debugger;
+                        //console.log('usePersianDt=' + usePersianDt);
+                        //console.log('miladiDtFormat=' + miladiDtFormat);
+                        //console.log('persianDtFormat=' + persianDtFormat);
+                        //console.log('dtFormat=' + dtFormat);
+
+                        strCpFounderLabel = $("#CpFounderLabel").val() + ":";
+                        strPublisherLabel = $("#PublisherLabel").val() + ":";
+                        myselfDisplayName = $("#MyselfDisplayName").val();
+                        myself = $("#Myself").val();
+                        $nsSchedulerElm = $(nsSchedulerElmId);
+                        $repList = $('.repository-contentpacks ol.contentpack-repository-list', $nsSchedulerElm);
+                        $modalConfirmMoveFromRep2Sch = $('#ModalConfirmMoveFromRep2Sch');
+                        selectedBrandId = $('#SelectedBrandId').val();
+
+
+                        if ($nsSchedulerElm.length <= 0) {
+                            return;
+                        }
+
+                        $btnToday.prop("disabled", true).addClass("disabled");
+                        $btnTomarrow.prop("disabled", true).addClass("disabled");
+                        $btnSaveSchedules.attr("disabled", true).addClass("disabled").css({ 'cursor': 'not-allowed', 'pointer-events': 'all' });
+
+                        hx.setGlobalAntiforgery();
+
+                        // انتخاب تایم‌لاین زمانبندی
+
+                        //پرکردن رویدادهای تایم‌لاین زمانبندی از روی جیسان
+                        //var data = [{'dt':'16/01/2016','contentpacks':[{'id':10,'title':'A1'},{'id':11,'title':'A2'},{'id':12,'title':'A3'}]},
+                        //			{'dt':'16/02/2016','contentpacks':[{'id':13,'title':'B1'}]},
+                        //			{'dt':'16/03/2016','contentpacks':[{'id':14,'title':'C1'},{'id':15,'title':'C2'}]}];
+
+
+                        function getDestNameByDestId(destId) {
+                            if (destId == 100) return 'telegram';
+                            else if (destId == 200) return 'facebook';
+                            else if (destId == 300) return 'twitter';
+                            else return 'unknown';
+                        }
+
+                        function getDestIdByDestName(destName) {
+                            if (destName == 'telegram') return 100;
+                            else if (destName == 'facebook') return 200;
+                            else if (destName == 'twitter') return 300;
+                            else return 100000;
+                        }
+
+                        //show  //shown //hidden
+                        $modalConfirmMoveFromRep2Sch.on('show', function() {
+                            //App.unblockUI(nsSchedulerElmId);
+                            $('.hx-count-of-selected-cps').text(this.data('countofselectedcps'));
+                            $('.hx-target-sch-date').text(this.data('targetschdate'));
+                            $('.hx-target-sch-time').text(this.data('targetschtime'));
+                        });
+
+                        // سوارکردن پلاگین تایم‌لاین افقی روی تمام تایم‌لاین‌های داخل این صفحه
+                        var nsScheduler = hrTimeline().initTimeline('#NsSchedulerElm', {
+                            eventsMinDistance: 80,
+                            eventsMaxDistance: 80,
+                            defaultActiveDestIds: [],
+                            defaultDisableDestIds: [],
+                            limitMaxAddContentPack: 20,
+                            includeEventsInLimitSpace: true,
+                            limitBeforeDt: new Date('03/23/2016 00:00'),
+                            limitAfterDt: new Date('12/22/2016 00:00'),
+                            initEvent: '22/03/2016T12:40', // << it can be:	'last' OR 'first' OR a strDate  |  default is last
+                            event: function(miladiDt, $targetA) { // targetDt is a Date object
+                                var hxDt = getHxDt(miladiDt, usePersianDt, false, false),
+                                    $sibl = $('<div class="event-sibl">'),
+                                    $dayOfWeek = $('<div class="day-of-week">').text(hxDt.dayOfWeekName),
+                                    $time = $('<div class="time">').text(hxDt.time),
+                                    $year = $('<div class="year">').text(hxDt.year),
+                                    $day_month = $('<div class="date">').html(hxDt.day + ' ' + hxDt.monthName);
+                                $targetA.append($sibl.append($dayOfWeek)
+                                    .append($day_month)
+                                    .append($time)
+                                    .append($year));
+                                return $targetA;
+                            },
+                            contentPack: function(cpIndex, contentPackInfo, $targetLi, isDuringLoadingData) {
+                                var altClass = '',
+                                    thisObj = this,
+                                    eventDt = this.parseDt(contentPackInfo.eventDt),
+                                    isInLimitSpace = eventDt > this.limitAfterDt || eventDt < this.limitBeforeDt,
+                                    justOnSocialNetwork = hasJustOneSocialNetwork(socialNetworkSwitches, nsScheduler.defaultActiveDestIds, nsScheduler.defaultDisableDestIds),
+                                    cpTitleLen = !contentPackInfo.cpTitle ? 0 : contentPackInfo.cpTitle.length,
+                                    cpTitle = cpTitleLen >= 50 ? contentPackInfo.cpTitle + "..." : contentPackInfo.cpTitle;
+                                cpTitle = cpTitle.replace(/#(.+?)(?=[\s.,:,]|$)/gi, '<span class="font-yellow-mint">$&</span>'); //<<هایلایت تگها
+                                if (cpIndex % 2 != 0)
+                                    altClass = 'alt';
+
+                                var $portsDiv = $('<div class="dests ' + (justOnSocialNetwork ? "hide" : "") + '">');
+                                makeSocialNetworkSwitches($portsDiv, contentPackInfo.schedules, thisObj.defaultActiveDestIds, thisObj.defaultDisableDestIds, !isDuringLoadingData, true, isInLimitSpace, 25);
+                                //Apply limit disables
+                                //$portsDiv.find('input').each(function() {
+                                //    if (isInLimitSpace)
+                                //        $(this).bootstrapToggle('disable');
+                                //});
+                                return $targetLi.addClass(altClass)
+                                    //.append($('<div class="new-contentpack-sign">'))
+                                    //.append($('<button class="btn-remove-contentpack">').text('x').prop('disabled', isInLimitSpace).addClass(isInLimitSpace ? 'disabled' : ''))
+                                    //.append($('<button class="btn-move btn-move-before">').text('▲').prop('disabled', isInLimitSpace).addClass(isInLimitSpace ? 'disabled' : ''))
+                                    //.append($('<button class="btn-move btn-move-after">').text('▼').prop('disabled', isInLimitSpace).addClass(isInLimitSpace ? 'disabled' : ''))
+                                    //.append($('<span>').addClass('row-no').text(cpIndex + 1))
+                                    //.append($('<div>').addClass('cp-img').addClass(getCpImageClassbyCpType(contentPackInfo.extra.type)))
+                                    //.append($('<div>').addClass('inner')
+                                    //    .append($('<div>').addClass('title').text(contentPackInfo.cpId + '  -  ' + contentPackInfo.cpTitle))
+                                    //    .append($portsDiv));
+                                    .append($('<div class="row">')
+                                        .append($('<div class="new-contentpack-sign">').text("new"))
+                                        .append($('<button class="btn-remove-contentpack">').text('x').prop('disabled', isInLimitSpace).addClass(isInLimitSpace ? 'disabled' : ''))
+                                        .append($('<span>').addClass('row-no').text(cpIndex + 1))
+                                        .append($('<div class="col-fixed-32">')
+                                            .append($('<button class="btn-move btn-move-before">').text('▲').prop('disabled', isInLimitSpace).addClass(isInLimitSpace ? 'disabled' : ''))
+                                            .append($('<button class="btn-move btn-move-after">').text('▼').prop('disabled', isInLimitSpace).addClass(isInLimitSpace ? 'disabled' : ''))
+                                        )
+                                        .append($('<div class="col-fixed-46">')
+                                            .append($('<div>').addClass('cp-img').addClass(getCpImageClassbyCpType(contentPackInfo.extra.type)))
+                                        )
+                                        .append($('<div class="col-xs-12 col-offset-78">')
+                                            .append($('<div class="inner">')
+                                                .append($('<span class="identity hx-en">').html(hx.hxAddLrmRlm("#CP" + contentPackInfo.cpId)))
+                                                .append($('<span class="title">').html(emoji(cpTitle)))
+                                                .append($('<div class="extra">')
+                                                    .append($('<span class="publisher-label">').text(strPublisherLabel))
+                                                    .append($('<span class="publisher">').text(contentPackInfo.extra.publisher ? (contentPackInfo.extra.publisher == myselfDisplayName ? myself : contentPackInfo.extra.publisher) : myself))
+                                                    .append($('<span class="cp-founder-label">').text(strCpFounderLabel))
+                                                    .append($('<span class="cp-founder">').text(contentPackInfo.extra.cpFounder == myselfDisplayName ? myself : contentPackInfo.extra.cpFounder))
+                                                    //.append($('<span class="dt">').html(formatStrDt(contentPackInfo.extra.sendDt)))
+                                                )
+                                                .append($portsDiv)
+                                            )
+                                        ));
+                            },
+                            removeEventConfirm: function(strDt, dt) {
+                                return confirm("Are you sure that you want remove " + strDt + " event?");
+                            },
+                            confirmSelectingEvent: function(strDt, dt, eventExistsStatus, callback) {
+                                var thisObj = this,
+                                    $checkedInputs = $('.repository-contentpacks li input:checked', $nsSchedulerElm),
+                                    requestCount = $checkedInputs.length,
+                                    isInLimitSpace = dt > this.limitAfterDt || dt < this.limitBeforeDt;
+
+                                if (hasNotAnySocialNetworkSwitch(socialNetworkSwitches)) {
+                                    showAlertBecauseThereIsNotAnySocialNetworkSwitch();
+                                    typeof callback === 'function' && callback(true);
+                                    return;
+                                }
+
+                                // اگر آیتم تیک خورده داشتیم
+                                if (eventExistsStatus == 'isExists' && requestCount > 0) {
+                                    if (nsScheduler.limitMaxAddContentPack > -1) {
+                                        var allowedCount = nsScheduler.limitMaxAddContentPack - nsScheduler.countOfAddedContentPacks,
+                                            noneAllowedCount = requestCount - allowedCount;
+                                        if (noneAllowedCount > 0) {
+                                            var message;
+                                            if (noneAllowedCount == requestCount) {
+                                                message = strSchedulingContent_LimitMaxItemReachedForAll;
+                                            } else {
+                                                message = strSchedulingContent_LimitMaxItemReachedForSome;
+                                                message = message.split("[allowedCount]").join(allowedCount); //<< معادل ریپلیس‌آل
+                                            }
+                                            message = message.replace("[limitMaxAddContentPack]", nsScheduler.limitMaxAddContentPack);
+                                            message = message.replace("[countOfAddedContentPacks]", nsScheduler.countOfAddedContentPacks);
+                                            message = message.replace("[requestCount]", requestCount);
+                                            bootbox.alert(hx.drawBootboxInner("error", null, strError, message));
+                                            return false;
+                                        }
+                                    }
+
+                                    //$modalConfirmMoveFromRep2Sch.data('countofselectedcps', requestCount);
+                                    //$modalConfirmMoveFromRep2Sch.data('targetschdate', strDt);
+                                    //$modalConfirmMoveFromRep2Sch.data('targetschtime', strDt);
+                                    //$modalConfirmMoveFromRep2Sch.show();
+                                    if (isInLimitSpace) {
+                                        $checkedInputs.each(function() {
+                                            var $this = $(this),
+                                                $li = $this.closest('li'),
+                                                cpFounder = $li.find('.cp-founder').text(),
+                                                sendDt = $li.find('.dt').text();
+                                            var contentPackInfo = {
+                                                eventDt: strDt,
+                                                cpId: $li.data('cpid'),
+                                                cpIndex: -1,
+                                                cpTitle: $li.find('.title').ignore('span').text(),
+                                                schedules: [],
+                                                extra: { type: $li.data('cptype'), cpFounder: cpFounder, publisher: myselfDisplayName, sendDt: sendDt }
+                                            };
+                                            // اگر درج به دلیل محدودیت در سقف محتواهای قابل افزودن به پلاگین لغو شد
+                                            if (!nsScheduler.addContentPack(contentPackInfo)) {
+                                                typeof callback === 'function' && callback(false);
+                                                return false;
+                                            }
+                                        });
+                                        return;
+                                    }
+
+                                    var hxDt = getHxDt(nsScheduler.parseDt(strDt), usePersianDt, false, false);
+                                    bootbox.confirm({
+                                        size: "large",
+                                        message: function() {
+                                            var $container = $('<div>');
+                                            var part2, part1, justOnSocialNetwork = true;
+                                            justOnSocialNetwork = hasJustOneSocialNetwork(socialNetworkSwitches, nsScheduler.defaultActiveDestIds, nsScheduler.defaultDisableDestIds);
+                                            if (justOnSocialNetwork) {
+                                                part1 = schedulingContent_ConfirmSelectingEvent_PartB1;
+                                                part2 = "";
+                                            } else {
+                                                part2 = schedulingContent_ConfirmSelectingEvent_PartA2.replace('👆🏼', emoji('👆🏼')),
+                                                    part1 = schedulingContent_ConfirmSelectingEvent_PartA1;
+                                            }
+                                            part1 = part1.replace("[requestCount]", requestCount).replace("[hxDt.day]", hxDt.day).replace("[hxDt.monthName]", hxDt.monthName).replace("[hxDt.year]", hxDt.year).replace("[hxDt.time]", hxDt.time);
+                                            $container.html(part1)
+                                                .append($('<div class="row" style="padding:20px;">').addClass((justOnSocialNetwork ? "hide" : ""))
+                                                    .append(makeSocialNetworkSwitches($('<div class="col-md-12 ' + (justOnSocialNetwork == true ? "hide" : "") + '">'), null, thisObj.defaultActiveDestIds, thisObj.defaultDisableDestIds, true, true, isInLimitSpace, 25))
+                                                    .append($('<hr>').addClass("style9").addClass((justOnSocialNetwork ? "hide" : "")))
+                                                    .append($('<span class="small">').html(part2))
+                                                );
+                                            return $container;
+                                        },
+                                        callback: function(result) {
+                                            //console.log(this);
+                                            var $thisConfirmBox = $(this);
+                                            if (!result) {
+                                                typeof callback === 'function' && callback(false); // << result=false
+                                                return;
+                                            }
+
+                                            var schedules = [];
+                                            //for (var i = 0; i < thisObj.defaultActiveDestIds.length; i++) {
+                                            //    schedules[i] = { schId: undefined, destId: thisObj.defaultActiveDestIds[i] };
+                                            //}
+                                            // حالا از روی وضعیت سوئیچ‌هایی که کاربر تنظیم کرده وضعیت انتشار محتتواهای انتخابی را در شبکه‌های اجتماعی مختلف تنظیم میکنیم
+                                            $thisConfirmBox.find('input:checkbox:checked').each(function() {
+                                                var $switCh = $(this);
+                                                schedules.push({ schId: undefined, destId: $switCh.data('destid') });
+                                            });
+
+                                            $checkedInputs.each(function() {
+                                                var $this = $(this),
+                                                    $li = $this.closest('li'),
+                                                    cpFounder = $li.find('.cp-founder').text(),
+                                                    sendDt = $li.find('.dt').text();
+                                                var contentPackInfo = {
+                                                    eventDt: strDt,
+                                                    cpId: $li.data('cpid'),
+                                                    cpIndex: -1,
+                                                    cpTitle: $li.find('.title').ignore('span').text(),
+                                                    schedules: schedules,
+                                                    extra: { type: $li.data('cptype'), cpFounder: cpFounder, sendDt: sendDt }
+                                                };
+                                                // اگر درج به دلیل محدودیت در سقف محتواهای قابل افزودن به پلاگین لغو شد
+                                                if (!nsScheduler.addContentPack(contentPackInfo)) {
+                                                    typeof callback === 'function' && callback(false);
+                                                    return;
+                                                }
+                                            });
+
+                                            if (isInLimitSpace) {
+                                                typeof callback === 'function' && callback(false);
+                                                return;
+                                            } else {
+                                                $checkedInputs.iCheck('uncheck');
+                                                typeof callback === 'function' && callback(true);
+                                                return;
+                                            }
+
+                                        }
+                                    });
+                                } else {
+                                    typeof callback === 'function' && callback(true);
+                                }
+                            }
+                        });
+                        nsScheduler.timeline
+                            .on('DataChanged', function(e, eventName, eventIndex, cpGlobalIndex, extra) {
+                                setRemainPost(nsScheduler);
+
+                                if (eventName != "EventAdded")
+                                    $btnSaveSchedules.attr("disabled", false).removeClass("disabled").css('cursor', 'pointer');
+
+                                $('#JsonViewerForData').text(JSON.stringify(nsScheduler.data, null, 4));
+
+                                var someOtherInfo = ' | CountOfAddedContentPacks: ' + nsScheduler.countOfAddedContentPacks;
+                                if (eventName != "EventRemoved" && eventName != "ContentPackRemoved") {
+                                    someOtherInfo += ' | EventDt: ' + nsScheduler.data.all[eventIndex].eventDt;
+                                }
+                                //if (eventName == 'ContentPackRemoved' || eventName == 'ContentPackAdded')
+                                //    console.log('DataChanged >> EventName= ' + eventName + ' | cpGlobalIndex= ' + cpGlobalIndex + someOtherInfo);
+                                //else if (eventName == 'EventRemoved' || eventName == 'EventAdded')
+                                //    console.log('DataChanged >> EventName= ' + eventName + ' | EventIndex' + eventIndex + someOtherInfo);
+                                //else
+                                //    console.log('DataChanged >> EventName= ' + eventName + ' | EventIndex' + eventIndex + someOtherInfo);
+
+                            })
+                            .on('DataBeforLoading', function(e, newData) {
+                                //console.log('DataBeforLoading');
+                            })
+                            .on('DataLoaded', function(e, loadedData) {
+                                //$('#JsonViewerForData').text(JSON.stringify(nsScheduler.data, null, 4));
+                                //console.log('DataLoaded'); //,JSON.stringify(loadedData));
+                                $('.brand-remain-post-count').text(nsScheduler.remainPostCount());
+                                $("input[data-toggle='toggle']").bootstrapToggle();
+                                $btnToday.prop("disabled", false).removeClass("disabled");
+                                $btnTomarrow.prop("disabled", false).removeClass("disabled");
+                                setRemainPost(nsScheduler);
+                                if (loadedData <= 0) {
+                                    $('#FormatedTitleDt').click();
+                                }
+                                //کد زیر برخی هندلهای تم را برای المانهای جدیدا لود شده مقداردهی میکند. مثلا به راه انداختن تولتیپ روی آیتم‌های لود شده پس از یک ایجکس
+                                App.initAjax();
+                            })
+                            .on('DataLoadingError', function(e, loadedData) {
+                                //console.log('DataLoadingError'); //,JSON.stringify(loadedData));
+                            })
+                            .on('AfterChangeCpIndex', function(e, cpGlobalIndex, cpIndex) {
+                                //console.log('AfterChangeCpIndex >> cpGlobalIndex: ' + cpGlobalIndex + '  |  cpIndex: ' + cpIndex + '  |  cpIndex from jQuery data: ' + $('.events-contentpack ol', this.timeline).find('li').eq(cpGlobalIndex).data('cpindex'));
+                                $('.events-contentpack ol', this.timeline).find('li').eq(cpGlobalIndex).find('.row-no').text(cpIndex + 1)
+                                    // کد لازم برای نمایان کردن مجدد انیمیشن پشت کلاس سی‌اس‌اسی
+                                    // row-no
+                                    // با این کد کلاس مربوطه را برمیداریم و بایک مکث 1 میلی ثانیه‌ای دوباره مدرجش میکنیم
+                                    // حین این عمل برای پرهیز از نمایش المنت مربوطه بدون کلاس مورد بحث، آن را پنهان میکنیم
+                                    // و با گذشت 1 میلی ثانیه دوباره نمایانش میکنیم
+                                    .removeClass('row-no').hide().delay(1)
+                                    .queue(function() {
+                                        $(this).addClass('row-no').show().dequeue();
+                                    });
+                            })
+                            .on('EventAdded', function(e, strDt, Dt, eventIndex) {
+                                //console.log('EventAdded >> ' + strDt);
+                            })
+                            .on('EventRemoved', function(e, strDt, Dt) {
+                                //console.log('EventRemoved >> ' + strDt);
+                            })
+                            .on('SelectedEventChanged', function(e, strDt, dt) {
+                                $('#BtnAddEvent', $nsSchedulerElm).addClass('disabled');
+                                //console.log('SelectedEventChanged >> ' + strDt);
+                                $('.calendar-box', $nsSchedulerElm).removeClass('not-exists-event');
+
+                                //var englishNumber = !usePersianDt,
+                                //    isGregorian = !usePersianDt,
+                                //    miladiDt = nsScheduler.parseDt(strDt),
+                                //    targetDt = miladiDt,
+                                //    format = "dddd dd MMMM yyyy _ HH:mm";
+                                //if (usePersianDt) {
+                                //    format = "dddd dd MMMM yyyy ساعت HH:mm";
+                                //    targetDt = getJsonDt(miladiDt);
+                                //}
+                                //var fullDtString = $.fn.MdPersianDateTimePicker('getDateTimeString', targetDt, format, englishNumber, isGregorian);
+                                //if (usePersianDt) {
+                                $('#FormatedTitleDt').val(getFormatedDateTime(dt, usePersianDt, dtFormat));
+                                //}
+                                //else {
+                                //    $('#FormatedTitleDt').MdPersianDateTimePicker('setValue', dt);
+                                //}
+                                // اعمال افکت فلش خوردن روی عنوان تاریخ انتخابی
+                                $('.calendar-box', $nsSchedulerElm).removeClass('flash-title');
+                                setTimeout(function() {
+                                    $('.calendar-box', $nsSchedulerElm).addClass('flash-title');
+                                }, 1);
+
+                            })
+                            .on('ContentPackAdded', function(e, contentpackInfo, eventIndex, cpGlobalIndex, isSavedAtServerSide) {
+                                //console.log('ContentPackAdded >> ' + " cpGlobalIndex: " + cpGlobalIndex + " |  CpIndex: " + contentpackInfo.cpIndex + " | CpTitle: " + contentpackInfo.cpTitle + ' EventDt: ' + contentpackInfo.eventDt);
+                                $('#ModifiedContentPackData').val(JSON.stringify(contentpackInfo));
+                                $('#ModifiedContentPackActivity').text('Add | ' + isSavedAtServerSide);
+                                $("input[data-toggle='toggle']").bootstrapToggle();
+                            })
+                            .on('ContentPackRemoved', function(e, contentpackInfo, eventIndex, cpGlobalIndex, isSavedAtServerSide) {
+                                //console.log('ContentPackRemoved >> ' + " cpGlobalIndex: " + cpGlobalIndex + " |  CpIndex: " + contentpackInfo.cpIndex + " | CpTitle: " + contentpackInfo.cpTitle + ' EventDt: ' + contentpackInfo.eventDt);
+                                $('#ModifiedContentPackData').val(JSON.stringify(contentpackInfo));
+                                $('#ModifiedContentPackActivity').text('Remove | ' + isSavedAtServerSide);
+                            })
+                            .on('TryAddContentPackToNoneExistsEvent', function(e, targetContentPack) {
+                                //console.log("TryAddContentPackToNoneExistsEvent: " + JSON.stringify(targetContentPack));
+                            })
+                            .on('TryGoingToNoneExistsEvent', function(e, strDt, dt) {
+                                //console.log("TryGoingToNoneExistsEvent >> " + strDt + ' is not exists!');
+                            })
+                            .on('GoingToEvent', function(e, strDt, dt) {
+                                //console.log("GoingToEvent >> " + strDt + '');
+                                if (!firstShowRepository)
+                                    swichTab('ScheduledContentPacks', $nsSchedulerElm);
+                                firstShowRepository = false;
+
+                                //چون محتوا به طور داینمیک تغییر کرده لذا برای آپدیت وضعیت اسکرولر اختصاصی بدنه سایت آن را رفرش میکنیم
+                                // این کار را با کسری از ثانیه مکث انجام میدهیم تا انیمیشن‌های نمایش دهنده تمام شده و ارتفاع فیکس شده باشه
+                                setTimeout(function () { hx.refreshNiceScolle('GoingToEvent'); }, 200);
+                            })
+                            .on('TryAddEventOutOfLimit', function(e, strDt, dt, type, limitDt) {
+                                //type may be:  AfterLimitAfterDt   OR   BeforeLimitBeforeDt
+                                //console.log("TryAddEventOutOfLimit >> " + strDt + " | Type: " + type + " | LimitDt: " + limitDt);
+                                bootbox.alert('<div class="hx-prompt-header font-red-mint">' + strError + '!</div>' + schedulingContent_Err_TryAddEventOutOfLimit.replace("{0}", '<span class="hx-prompt-formated-dt font-green-sharp">' + getFormatedDateTime(dt, usePersianDt, dtFormat) + '</span>'));
+                            })
+                            .on('TryRemoveEventOutOfLimit', function(e, strDt, dt, type, limitDt) {
+                                //type may be:  AfterLimitAfterDt   OR   BeforeLimitBeforeDt
+                                //console.log("TryRemoveEventOutOfLimit >> " + strDt + " | Type: " + type + " | LimitDt: " + limitDt);
+                                bootbox.alert('<div class="hx-prompt-header font-red-mint">' + strError + '!</div>' + schedulingContent_Err_TryRemoveEventOutOfLimit.replace("{0}", '<span class="hx-prompt-formated-dt font-green-sharp">' + getFormatedDateTime(dt, usePersianDt, dtFormat) + '</span>'));
+                            })
+                            .on('TryAddContentPackOutOfLimit', function(e, strDt, dt, type, limitDt) {
+                                //type may be:  AfterLimitAfterDt   OR   BeforeLimitBeforeDt
+                                //console.log("TryAddContentPackOutOfLimit >> " + strDt + " | Type: " + type + " | LimitDt: " + limitDt);
+                                bootbox.alert('<div class="hx-prompt-header font-red-mint">' + strError + '!</div>' + schedulingContent_Err_TryAddContentPackOutOfLimit.replace("{0}", '<span class="hx-prompt-formated-dt font-green-sharp">' + getFormatedDateTime(dt, usePersianDt, dtFormat) + '</span>'));
+                            })
+                            .on('TryRemoveContentPackOutOfLimit', function(e, strDt, dt, type, limitDt) {
+                                //type may be:  AfterLimitAfterDt   OR   BeforeLimitBeforeDt
+                                //console.log("TryRemoveContentPackOutOfLimit >> " + strDt + " | Type: " + type + " | LimitDt: " + limitDt);
+                                bootbox.alert('<div class="hx-prompt-header font-red-mint">' + strError + '!</div>' + SchedulingContent_Err_TryRemoveContentPackOutOfLimit.replace("{0}", '<span class="hx-prompt-formated-dt font-green-sharp">' + getFormatedDateTime(dt, usePersianDt, dtFormat) + '</span>'));
+                            })
+                            .on('TryAddContentPackOutOfLimitMax', function(e, contentpackInfo, limitMaxAddContentPack, countOfAddedContentPacks) {
+                                //console.log("TryAddContentPackOutOfLimitMax >> " + contentpackInfo.cpTitle + " | LimitMaxAddContentPack: " + limitMaxAddContentPack + " | CountOfAddedContentPacks: " + countOfAddedContentPacks);
+                                bootbox.alert('<div class="hx-prompt-header font-red-mint">' + strError + '!</div>' + SchedulingContent_Err_TryAddContentPackOutOfLimitMax.replace("{0}", '<span class="hx-prompt-formated-dt font-green-sharp">' + getFormatedDateTime(dt, usePersianDt, dtFormat) + '</span>'));
+                            });
+
+
+                        //جهش به یک تاریخ و زمان مشخص روی تاملاین زمانبندی
+                        //nsScheduler.gotoEvent('16/01/2016');
+                        //nsScheduler.addContentPack({'dt':'16/01/2016','index':1,'body':{'id':18,'title':'new item'}});
+
+                        // این خط فقط پارامتر دیتا را تغییر میدهد و اچ‌تی‌ام‌ال را دستکاری نمیکند
+                        // لذا برای ووقتی که درگ اند دراپ میکنیم به درد میخورد که عملیات درج اچ‌تی‌ام‌ال ای انجام شده
+                        // و فقط کافیست که دیتا تغییر کند
+                        //nsScheduler.addContentPack({'dt':'16/01/2016','index':2,'body':{'id':18,'title':'new item'}},true);
+
+                        //nsScheduler.addEvent(strDt,true);
+
+                        $('body').on('change', '#NsSchedulerElm input#FormatedTitleDt', function() {
+                            var strDt = getStrDtFromPersianDataPicker(nsScheduler, $(this), true),
+                                isExists = nsScheduler.isEventExists(strDt);
+                            if (isExists) {
+                                $(this).closest('.calendar-box').removeClass('not-exists-event');
+                                $('#BtnAddEvent', $nsSchedulerElm).addClass('disabled');
+                                nsScheduler.gotoEvent(strDt);
+                            } else {
+                                $('#BtnAddEvent', $nsSchedulerElm).removeClass('disabled');
+                                $(this).closest('.calendar-box').addClass('not-exists-event');
+                            }
+                        });
+
+                        $('body').on('click', '#NsSchedulerElm #BtnReloadCp', function() {
+                            //disable reload btn for some moments
+                            var url = urGetNewCpsOfRepository,
+                                $cpIdOfNewestItemInRep = getCpIdOfNewestItemInRepository(),
+                                $btnLoadOld = $('#NsSchedulerElm #BtnLoadOldCp');
+                            if ($cpIdOfNewestItemInRep) {
+                                url = urGetNewCpsOfRepository + "?lastId=" + $cpIdOfNewestItemInRep;
+                            }
+                            disableBtnReloadRepository();
+                            $.ajax({
+                                url: url,
+                                //data: data,
+                                dataType: 'json',
+                                beforeSend: function(xhr, opts) {
+                                    App.blockUI({
+                                        target: repositoryId,
+                                        animate: true
+                                    });
+                                    //window.setTimeout(function() {
+                                    //    App.unblockUI(repositoryId);
+                                    //}, 20000);
+                                },
+                                success: function (cpList) {
+                                    // use try catch to garante complete handler be runed
+                                    try {
+                                        if (cpList || cpList.length > 0) {
+                                            $btnLoadOld.removeClass('hide');
+                                            prependToRepository(cpList);
+                                            //چون محتوا به طور داینمیک تغییر کرده لذا برای آپدیت وضعیت اسکرولر اختصاصی بدنه سایت آن را رفرش میکنیم
+                                            //$("body").getNiceScroll().resize();
+                                        }
+                                    } catch (err) {
+                                    }
+                                },
+                                error: function(err) {
+                                    hx.hxShowConnectionError();
+                                },
+                                complete: function() {
+                                    App.unblockUI(repositoryId);
+                                    //enable reload btn after some moments
+                                    enableBtnReloadRepositoryWithTimer(5000);
+                                }
+                            });
+                        });
+
+                        $('body').on('click', '#NsSchedulerElm #BtnLoadOldCp', function() {
+                            //disable reload btn for some moments
+                            var $btnLoadOld = $(this),
+                                url = urGetNewCpsOfRepository,
+                                $cpIdOfNewestItemInRep = getCpIdOfOldestItemInRepository();
+                            if ($cpIdOfNewestItemInRep) {
+                                url = urGetNewCpsOfRepository + "?lastId=" + $cpIdOfNewestItemInRep + "&old=true";
+                            }
+                            disableBtnReloadRepository();
+                            $.ajax({
+                                url: url,
+                                //data: data,
+                                dataType: 'json',
+                                beforeSend: function(xhr, opts) {
+                                    App.blockUI({
+                                        target: repositoryId,
+                                        animate: true
+                                    });
+                                    //window.setTimeout(function() {
+                                    //    App.unblockUI(repositoryId);
+                                    //}, 20000);
+                                },
+                                success: function(cpList) {
+                                    if (!cpList || cpList.length == 0) {
+                                        $btnLoadOld.addClass('hide');
+                                    } else {
+                                        appendToRepository(cpList);
+                                        //چون محتوا به طور داینمیک تغییر کرده لذا برای آپدیت وضعیت اسکرولر اختصاصی بدنه سایت آن را رفرش میکنیم
+                                        //$("body").getNiceScroll().resize();
+                                    }
+                                },
+                                error: function(err) {
+                                    hx.hxShowConnectionError();
+                                },
+                                complete: function() {
+                                    App.unblockUI(repositoryId);
+                                    //enable reload btn after some moments
+                                    enableBtnReloadRepositoryWithTimer(5000);
+                                }
+                            });
+                        });
+
+
+                        $('body').on('click', '#NsSchedulerElm #BtnAddEvent', function() {
+                            var strDt = getStrDtFromPersianDataPicker(nsScheduler, $('#NsSchedulerElm input#FormatedTitleDt'), true);
+                            nsScheduler.addEvent(strDt, true);
+                        });
+
+                        $('body').on('hidden.bs.popover', 'popover-persian-datapicker', function() {
+                            //var miladiDt = $('[data-name="datepicker1"]').MdPersianDateTimePicker('getDate');
+                            //console.log(miladiDt);
+                        });
+
+                        resetICheckboxes();
+
+                        $('body').on('mouseover', '#NsSchedulerElm .repository-contentpacks li', function() {
+                            $(this).find('div.icheckbox_square-blue').addClass('hover');
+                        });
+                        $('body').on('mouseleave', '#NsSchedulerElm .repository-contentpacks li', function() {
+                            $(this).find('div.icheckbox_square-blue').removeClass('hover');
+                        });
+                        $('body').on('ifChecked', '.repository-contentpacks li input:checkbox', function(event) {
+                            $(this).closest('li').addClass('selected');
+                        });
+                        $('body').on('ifUnchecked', '.repository-contentpacks li input:checkbox', function(event) {
+                            $(this).closest('li').removeClass('selected');
+                        });
+                        $('body').on('change', "#ScheduledContentPacks input[data-toggle='toggle']", function() {
+                            var $this = $(this);
+                            if ($(this).prop('checked'))
+                                nsScheduler.activeSchedule($this);
+                            else
+                                nsScheduler.deActiveSchedule($this);
+                        });
+
+
+                        $('#BtnGetIndexOfContentPackAtEvent').click(function() {
+                            var $c2Li = $('.events-contentpack ol', nsScheduler.timeline).find('li').eq(5);
+                            alert(nsScheduler.getIndexOfContentPackAtEvent($c2Li));
+                        });
+                        $('#BtnGetIndexOfLastContentPackAtEvent').click(function() {
+                            alert(nsScheduler.getIndexOfLastContentPackAtEvent($('#DtForIndexOfLastContentPackAtEvent').val()));
+                        });
+
+                        $('body').on('click', '#NsSchedulerElm .btn-remove-contentpack', function() {
+                            var $this = $(this),
+                                $li = $this.closest('li');
+
+                            $li.addClass('removing');
+                            //timeout is important !!
+                            setTimeout(function() {
+                                nsScheduler.removeContentPack($this.closest('li'));
+                            }, 300);
+                            /*$li.addClass('removing').delay(300).queue(function() {$li.dequeue();});*/
+                            //nsScheduler	.getIndexOfContentPackAtEvent($this.closest('li'));
+                            //nsScheduler. getIndexOfLastContentPackAtEvent($this.closest('li').data('dt'))
+                        });
+                        $('body').on('click', '#NsSchedulerElm .btn-move-before', function() {
+                            nsScheduler.moveUpContentPack($(this).closest('li'));
+                        });
+                        $('body').on('click', '#NsSchedulerElm .btn-move-after', function() {
+                            nsScheduler.moveDownContentPack($(this).closest('li'));
+                        });
+                        $('#BtnAddContentPack').click(function() {
+                            var targetContentPack = $.parseJSON($('#TextAreaAddContentPack').val());
+                            nsScheduler.addContentPack(targetContentPack);
+                        });
+                        $('#BtnGotoEvent').click(function() {
+                            nsScheduler.gotoEvent($('#GoTimeSelector').val());
+                        });
+                        $('#BtnAddEvent100').click(function() {
+                            nsScheduler.addEvent($('#EventSelector').val(), true);
+                        });
+                        $('#BtnRemoveEvent').click(function() {
+                            nsScheduler.removeEvent($('#EventSelector').val());
+                        });
+                        $('#BtnGetNextDt').click(function() {
+                            alert(nsScheduler.getStrDtOfNextEvent($(this).data('target')));
+                        });
+                        $('#BtnGetPrevDt').click(function() {
+                            alert(nsScheduler.getStrDtOfPrevEvent($(this).data('target')));
+                        });
+                        $('#BtnCpVisibility').click(function() {
+                            if ($('#Cp').is(':visible')) {
+                                $('#Cp').slideUp();
+                                $(this).text('Show Controll Panel');
+                            } else {
+                                $('#Cp').slideDown();
+                                $(this).text('Hide Control Panel');
+                            }
+                        });
+                        $('#BtnLoadHeavyData').click(function() {
+                            nsScheduler.loadData($('#JsonViewerForData').text());
+                        });
+                        $('#BtnLoadLightData').click(function() {
+                            loadSchedullerData(nsScheduler, selectedBrandId);
+                        });
+
+                        //با تغییر هرگونه تب داخل ابزار زمانبندی
+                        $('.ns-sch a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+                            //var target = $(e.target).attr("href") // activated tab
+
+                            //چون محتوا به طور داینمیک تغییر کرده لذا برای آپدیت وضعیت اسکرولر اختصاصی بدنه سایت آن را رفرش میکنیم
+                            // این کار را با کسری از ثانیه مکث انجام میدهیم تا انیمیشن‌های نمایش دهنده تمام شده و ارتفاع فیکس شده باشه
+                            setTimeout(function() {hx.refreshNiceScolle('shown.bs.tab');}, 200);
+                        });
+
+                        $btnSaveSchedules.click(function() {
+                            if ($(this).is(":not(:disabled, .disabled)"))
+                                saveSchedullerData(nsScheduler, selectedBrandId);
+                        });
+
+                        //nsScheduler.loadData(loadSchedullerData());
+                        loadSchedullerData(nsScheduler, selectedBrandId);
+
+                        setTimeout(function() {
+                            swichTab('ContentRepository', $nsSchedulerElm);
+                        }, 300);
+                    });
+
+                    function setRemainPost(nsScheduler) {
+                        var remainPost = nsScheduler.remainPostCount(),
+                            maxPost = nsScheduler.limitMaxAddContentPack,
+                            remainPercent = (remainPost / maxPost) * 100,
+                            $progress = $('.hx-brand-remain-post-progress');
+                        if ($progress.length == 0) return;
+                        var $progressBar = $progress.find('.progress-bar'),
+                            $overlay = $progress.find('.hx-progress-overlay'),
+                            $overlayValue = $progress.find('.hx-progress-overlay-value');
+                        if ($progressBar.length == 0) return;
+                        $progressBar.attr("aria-valuemax", maxPost).attr("aria-valuenow", remainPost).width(remainPercent + "%");
+                        if ($overlayValue.length == 0) return;
+                        $overlayValue.text(remainPost);
+                        $overlay.removeClass("hide");
+                    }
+
+                    function getCpIdOfNewestItemInRepository() {
+                        var $item = $repList.children(":first");
+                        if ($item.length <= 0) {
+                            return undefined;
+                        }
+                        return $item.data("cpid");
+                    }
+
+                    function getCpIdOfOldestItemInRepository() {
+                        var $item = $repList.children(":last");
+                        if ($item.length <= 0) {
+                            return undefined;
+                        }
+                        return $item.data("cpid");
+                    }
+
+                    function getJsonDt(miladiDt, usePersianDt) {
+                        if (usePersianDt) {
+                            var jDt = toJalaali(miladiDt.getFullYear(), miladiDt.getMonth() + 1, miladiDt.getDate());
+                            return {
+                                Year: jDt.jy,
+                                Month: jDt.jm,
+                                Day: jDt.jd,
+                                Hour: miladiDt.getHours(),
+                                Minute: miladiDt.getMinutes(),
+                                Second: miladiDt.getSeconds()
+                            };
+                        } else {
+                            return {
+                                Year: miladiDt.getFullYear(),
+                                Month: miladiDt.getMonth(),
+                                Day: miladiDt.getDate(),
+                                Hour: miladiDt.getHours(),
+                                Minute: miladiDt.getMinutes(),
+                                Second: miladiDt.getSeconds()
+                            };
+                        }
+                    }
+
+                    function getFormatedDateTime(dt, usePersianDt, dtFormat) {
+                        var englishNumber = !usePersianDt,
+                            isGregorian = !usePersianDt,
+                            targetDt = getJsonDt(dt, usePersianDt);
+                        if (usePersianDt) {
+                            targetDt = getJsonDt(dt, usePersianDt);
+                        }
+                        var fullDtString = $.fn.MdPersianDateTimePicker('getDateTimeString', targetDt, dtFormat, englishNumber, isGregorian);
+                        return fullDtString;
+                    }
+
+                    function getHxDt(miladiDt, usePersianDt, shortMonthName, shortDayOfWeekName) {
+                        var persianDt = usePersianDt ? getJsonDt(miladiDt, usePersianDt) : {},
+                            month = usePersianDt ? persianDt.Month : miladiDt.getMonth() + 1,
+                            dayOfWeekNo = miladiDt.getDay();
+                        var result = {
+                            miladiDt: miladiDt,
+                            persianDt: persianDt,
+                            time: usePersianDt ? persianDt.Hour + ':' + persianDt.Minute : miladiDt.getHours() + ':' + miladiDt.getMinutes(),
+                            year: usePersianDt ? persianDt.Year : miladiDt.getFullYear(),
+                            month: month,
+                            monthName: hx.getMonthName(month, usePersianDt ? 'fa' : 'en', shortMonthName ? shortMonthName : false),
+                            day: usePersianDt ? persianDt.Day : miladiDt.getDate(),
+                            dayOfWeekNo: dayOfWeekNo,
+                            dayOfWeekName: hx.getDayOfWeekName(dayOfWeekNo, usePersianDt ? 'fa' : 'en', shortDayOfWeekName ? shortDayOfWeekName : false)
+                        };
+                        return result;
+                    }
+
+                    function makeSocialNetworkSwitches($container, schedules, defaultActives, defaultDisables, applyDefaultActives, applyDefaultDisables, isInLimitSpace, height) {
+                        var fontClass = height < 30 || !height ? 'hx-switch-small-icon' : undefined;
+                        //Make switches and disable them if they are in limit space
+                        for (var i = 0; i < socialNetworkSwitches.length; i++) {
+                            var $switCh = $('<input type="checkbox" class="' + socialNetworkSwitches[i].name + '-switch" data-toggle="toggle" ' + (height ? 'data-height="' + height + '"' : '') + ' data-height="50" data-size="mini" data-style="hx-switch-container-inc-icon" data-width="30px" title="' + capitalizeFirstLetter(socialNetworkSwitches[i].name) + '" data-on="<i class=\'hx-icon-in-switch fa ' + socialNetworkSwitches[i].cssClass + ' ' + fontClass + '\'></i>" data-off="<i class=\'hx-icon-in-switch fa ' + socialNetworkSwitches[i].cssClass + ' ' + fontClass + '\'></i>">'); //.addClass(isInLimitSpace ? 'disabled' : '').prop('disabled', isInLimitSpace);
+                            $switCh.attr('data-destid', socialNetworkSwitches[i].destId);
+                            $container.append($switCh);
+                        }
+                        $("input[data-toggle='toggle']", $container).bootstrapToggle();
+
+                        if (applyDefaultActives || applyDefaultDisables) {
+                            //Apply defaults disabled and checked statuses if i shoulid apply each one
+                            $container.find('input').each(function() {
+                                var $this = $(this);
+                                var destId = $this.data('destid'),
+                                    disable = defaultDisables.indexOf(destId) > -1,
+                                    checked = defaultActives.indexOf(destId) > -1;
+                                if (applyDefaultActives && checked) {
+                                    $this.prop('checked', true);
+                                    $this.bootstrapToggle('on');
+                                }
+                                //if (applyDefaultDisables && disable) {
+                                //    $this.prop('disabled', true);
+                                //    $this.bootstrapToggle('disable');
+                                //}
+                            });
+                        }
+                        //Apply data statuses
+                        if (schedules && schedules.length > 0) {
+                            $.each(schedules, function(k, schItem) {
+                                $container.find("input[data-destid='" + schItem.destId + "']")
+                                    .data('schid', schItem.schId)
+                                    .prop('checked', true)
+                                    .bootstrapToggle('on');
+                            });
+                        }
+                        $container.find('input:checkbox').each(function() {
+                            var $this = $(this);
+                            var destId = $this.data('destid'),
+                                disable = defaultDisables.indexOf(destId) > -1 || isInLimitSpace, //<< in disable list or in limitation space
+                                checked = defaultActives.indexOf(destId) > -1;
+                            //if (applyDefaultActives && checked)
+                            //    $this.prop('checked', true);
+                            if (applyDefaultDisables && disable) {
+                                $this.prop('disabled', true);
+                                $this.bootstrapToggle('disable');
+                            }
+                        });
+                        return $container;
+                    }
+
+
+                    function swichTab(tabId, $nsSchedulerElm) {
+                        $('.nav-tabs a[href="#' + tabId + '"]', $nsSchedulerElm).tab('show');
+                    }
+
+                    function resetICheckboxes() {
+                        $('input.icheck').iCheck({
+                            checkboxClass: 'icheckbox_square-blue',
+                            radioClass: 'iradio_square-blue',
+                            increaseArea: '20%' // optional
+                        });
+                    }
+
+
+                    function prependToRepository(cpList) {
+                        $.each(cpList, function(i, cp) {
+                            $repList.prepend(makeRepositoryItem($("<li>"), i, cp));
+                        });
+                        resetICheckboxes();
+                    };
+
+                    function appendToRepository(cpList) {
+                        $.each(cpList, function(i, cp) {
+                            $repList.append(makeRepositoryItem($("<li>"), i, cp));
+                        });
+                        resetICheckboxes();
+                    };
+
+                    function makeRepositoryItem($li, i, cp) {
+                        $li.attr('data-cpid', cp.cpId).attr('data-cptype', cp.type).addClass(i % 2 != 0 ? '' : 'alt')
+                            .append($('<label style="display:block;">')
+                                .append($('<div class="row">')
+                                    .append($('<div class="col-fixed-32">')
+                                        .append($('<input type="checkbox" value="" class="icheck">'))
+                                    )
+                                    .append($('<div class="col-fixed-46">')
+                                        .append($('<div class="cp-img">').addClass(getCpImageClassbyCpType(cp.type)))
+                                    )
+                                    .append($('<div class="col-xs-12 col-offset-78">')
+                                        .append($('<div class="inner">')
+                                            .append($('<span class="identity hx-en">').html(hx.hxAddLrmRlm("#CP" + cp.cpId)))
+                                            .append($('<span class="title">').html(emoji(cp.title, {
+                                                //callback: function (icon, options) { return '//twemoji.maxcdn.com//2/assets/72x72/' + icon + '.png'; },
+                                                //attributes: function attributesCallback(rawText, iconId) {return { title: 'Emoji: ' + iconId + rawText};}
+
+                                            })))
+                                            .append($('<div class="extra">')
+                                                .append($('<span class="cp-founder-label">').text(strCpFounderLabel))
+                                                .append($('<span class="cp-founder">').text(cp.cpFounder == myselfDisplayName ? myself : cp.cpFounder))
+                                                .append($('<span class="dt">').html(formatStrDt(cp.sendDt)))
+                                            )
+                                        )
+                                    )
+                                )
+                            );
+                        return $li;
+                    }
+
+                    function showAlertBecauseThereIsNotAnySocialNetworkSwitch() {
+                        bootbox.alert({
+                            title: strReminder,
+                            message: SchedulingContent_Err_SchedulingForBrandThatHasNotAnyAssignedPorts,
+                            buttons: { 'ok': { label: 'OK' } }
+                        });
+                    }
+
+                    function hasNotAnySocialNetworkSwitch(socialNetworkSwitches) {
+                        return !socialNetworkSwitches || socialNetworkSwitches.length <= 0;
+                    }
+
+                    function hasJustOneSocialNetwork(allItems, defaultActiveItems, defaultDisableItems) {
+                        return defaultActiveItems.length == 1 && defaultDisableItems.length >= allItems.length - 1;
+                    }
+
+                    function enableBtnReloadRepositoryWithTimer(milliseconds) {
+                        window.setTimeout(function() {
+                            $(btnReloadRepositoryId, $nsSchedulerElm).prop('disabled', false).removeClass('disabled btn-default').addClass('violet');
+                        }, milliseconds);
+                    }
+
+                    function disableBtnReloadRepository() {
+                        $(btnReloadRepositoryId, $nsSchedulerElm).prop('disabled', true).addClass('disabled btn-default').removeClass('violet');
+                    }
+
+                    function enableBtnLoadOldRepositoryWithTimer(milliseconds) {
+                        window.setTimeout(function() {
+                            $(btnLoadOldRepositoryId, $nsSchedulerElm).prop('disabled', false).removeClass('disabled btn-default').addClass('violet');
+                        }, milliseconds);
+                    }
+
+                    function disableBtnLoadOldRepository() {
+                        $(btnLoadOldRepositoryId, $nsSchedulerElm).prop('disabled', true).addClass('disabled btn-default').removeClass('violet');
+                    }
+
+
+                    function formatStrDt(strDt) {
+                        //strDt sample: 2016-10-12T21:40:19.643
+                        if (!strDt || strDt == "" || strDt.indexOf('T') < 0)
+                            return '';
+                        strDt = strDt.replace("T", " "); //برداشتن حرف تی
+                        if (strDt.length > 16) //if has milliseconds
+                            strDt = strDt.substring(0, 16); //برداشتن ثانیه و میلی ثانیه
+                        strDt = strDt.slice(0, 10) + "&nbsp;&nbsp;&nbsp;" + strDt.slice(10); // اضافه کردن فاصله بین تاریخ و ساعت
+                        return hx.hxAddLrmRlm(strDt); // درج کاراکت چپ به راست و راست به چپ در ابتدا و انتهای تاریخ برای صحیح نوشته شدن
+                    }
+
+                    function getCpImageClassbyCpType(type) {
+                        return 'hx-icon-circle-' + (type ? type.toLowerCase() : 'unknown');
+                    }
+
+                    function getStrDtFromPersianDataPicker(nsScheduler, $dataPickerSelector, includeTime) {
+                        var miladiDt = $dataPickerSelector.MdPersianDateTimePicker('getDate');
+                        return nsScheduler.convertDtToStrDt(miladiDt, includeTime);
+                    }
+
+                    function showLogs(logs,strDt) {
+                        if (!logs || logs.length == 0) {
+                            return;
+                        }
+                        var $modal = $("#modalLogs");
+                        $modal.iziModal($.extend({}, hx.iziModal().defaultOptions,
+                            {
+                                title: "Helperx <span class=\"hx-font-color7\">»</span> Planner",
+                                rtl: false,// hx.isRtl,
+                                //onOpening: function (modal) {}
+                            }));
+
+                        //-------------------------------------------تنظیم محتوای مودال--------------------------------------------
+                        if (strDt) {
+                            $(".iziModal-content .list-date", $modal).text(strDt);
+                        }
+                        var innerHtml = "";
+                        for (var i = 0; i < logs.length; i++) {
+                            var log = logs[i];
+                            //-----------------------ساختن فول‌کد--------------------
+                            log.error = log.error ? log.error : "";
+                            log.code = log.code ? log.code : "";
+                            var fullCode = log.error == ""
+                                ? log.code
+                                : log.error + (log.code == "" ? "" : "-" + log.code);
+                            //-------------------------------------------------------
+                            innerHtml +=
+                                "<li class=\"mt-list-item done\">" +
+                                "<div class=\"list-icon-container\"><i class=\"icon-check\"></i><br>" + (fullCode == "" ? "" : "<br><small class=\"font-grey-salsa hx-en\">" + fullCode + "</small>") + "</div>" +
+                                "<div class=\"list-item-content\">" +
+                                "<h3 class=\"uppercase hx-font-color7\">" + log.title + "</h3>" +
+                                "<p>" + log.desc + "</p></div>" +
+                                "</li>";
+                        }
+                        $(".iziModal-content ul.hx-log-items", $modal).html(innerHtml);
+                        //-------------------------------------------/تنظیم محتوای مودال--------------------------------------------
+                        
+                        $modal.iziModal('open');
+                    }
+
+                    function loadSchedullerData(nsScheduler, brandId, gotoEventStDt) {
+                        if (!brandId || brandId == "")
+                            return;
+                        //return '[{"dt":"15/01/2016T10:15","contentpacks":[{"id":10,"schguid":"H54K6871","title":"A1"},{"id":11,"schguid":"T48Jk00","title":"A2"},{"id":12,"schguid":"masd178","title":"A3"}]},{"dt":"16/02/2016T14:40","contentpacks":[{"id":13,"schguid":"XTJ178","title":"B1"}]},{"dt":"16/10/2016T21:05","contentpacks":[{"id":14,"schguid":"gd54213d","title":"C1"},{"id":15,"schguid":"QD88RE","title":"C2"}]}]';
+                        $.ajax({
+                            url: urLoadSechduledContents,
+                            data: { bgid: brandId },
+                            dataType: 'json',
+                            type: 'GET',
+                            beforeSend: function(xhr, opts) {
+                                App.blockUI({
+                                    target: nsSchedulerElmId,
+                                    animate: true
+                                });
+                                //window.setTimeout(function() {
+                                //    App.unblockUI(nsSchedulerElmId);
+                                //}, 20000);
+                            },
+                            success: function(data) {
+                                // اگر لیست گزارشات رسیده خالی است به معنای عدم وجود خطا بوده
+                                if (!data.logs || data.logs.length<1) {
+                                    //data.events = '[ { "eventDt":"09/11/2016T12:40", "contentPacks":[ { "cpId":100, "cpIndex":0, "cpTitle":"sample 1", "schedules":[ { "schId":"10", "destId":100 }, { "schId":"11", "destId":200 }, { "schId":"12", "destId":300 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":101, "cpIndex":1, "cpTitle":"sample 2", "schedules":[ { "schId":"13", "destId":100 } ] }, { "cpId":102, "cpIndex":2, "cpTitle":"sample 3", "schedules":[ { "schId":"14", "destId":100 }, { "schId":"15", "destId":300 } ], "extra":{"type":"photo","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":103, "cpIndex":3, "cpTitle":"sample 3", "schedules":[ { "schId":"16", "destId":100 }, { "schId":"17", "destId":200 }, { "schId":"18", "destId":300 } ], "extra":{"type":"video","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] }, { "eventDt":"10/11/2016T12:40", "contentPacks":[ { "cpId":100, "cpIndex":0, "cpTitle":"sample 1", "schedules":[ { "schId":"19", "destId":100 }, { "schId":"20", "destId":200 }, { "schId":"21", "destId":300 } ], "extra":{"type":"audio","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":101, "cpIndex":1, "cpTitle":"sample 2", "schedules":[ { "schId":"22", "destId":100 } ], "extra":{"type":"photo","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":102, "cpIndex":2, "cpTitle":"sample 3", "schedules":[ { "schId":"23", "destId":100 }, { "schId":"24", "destId":300 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":103, "cpIndex":3, "cpTitle":"sample 3", "schedules":[ { "schId":"25", "destId":100 }, { "schId":"26", "destId":200 }, { "schId":"27", "destId":300 } ], "extra":{"type":"location","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] } , { "eventDt":"11/11/2016T12:40", "contentPacks":[ { "cpId":110, "cpIndex":0, "cpTitle":"sample 110", "schedules":[ { "schId":"28", "destId":100 }, { "schId":"29", "destId":200 }, { "schId":"30", "destId":300 } ], "extra":{"type":"contact","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":111, "cpIndex":1, "cpTitle":"sample 111", "schedules":[ { "schId":"31", "destId":100 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":112, "cpIndex":2, "cpTitle":"sample 112", "schedules":[ { "schId":"32", "destId":100 }, { "schId":"33", "destId":300 } ], "extra":{"type":"video","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":113, "cpIndex":3, "cpTitle":"sample 113", "schedules":[ { "schId":"34", "destId":100 }, { "schId":"35", "destId":200 }, { "schId":"36", "destId":300 } ], "extra":{"type":"document","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] } ]';
+                                    //console.log("BrandId: " + data.brandId);
+                                    socialNetworkSwitches = data.dests;
+                                    nsScheduler.defaultActiveDestIds = data.settings.defaultActiveDestIds;
+                                    nsScheduler.defaultDisableDestIds = data.settings.defaultDisableDestIds;
+                                    nsScheduler.limitMaxAddContentPack = data.settings.limitMaxAddCp;
+                                    nsScheduler.includeEventsInLimitSpace = data.settings.includeEventsInLimitSpace;
+                                    nsScheduler.limitBeforeDt = data.settings.limitBeforeDt ? nsScheduler.parseDt(data.settings.limitBeforeDt) : new Date('01/01/2000 00:00');
+                                    nsScheduler.limitAfterDt = data.settings.limitAfterDt ? nsScheduler.parseDt(data.settings.limitBeforeDt) : new Date('01/01/2100 00:00');
+                                    if (gotoEventStDt) {
+                                        var overideInitEvent = false;
+                                        $.each(data.events, function(i, event) {
+                                            if (event.eventDt == gotoEventStDt) {
+                                                overideInitEvent = true;
+                                                return false; //break
+                                            }
+                                        });
+                                        if (overideInitEvent)
+                                            nsScheduler.initEvent = gotoEventStDt;
+                                        else
+                                            nsScheduler.initEvent = data.settings.initEvent;
+                                    }
+                                    if (hasNotAnySocialNetworkSwitch(socialNetworkSwitches)) {
+                                        showAlertBecauseThereIsNotAnySocialNetworkSwitch();
+                                    }
+                                    nsScheduler.loadData(data.events);
+
+                            } else {
+                                    showLogs(data.logs,data.nowUserDt);
+                                    //var msg = { code: -1, title: null, desc: "An error occurred when loading the schedules! Please try again after several minutes." };
+                                    //if (data.replyMsg) {
+                                    //    msg = data.replyMsg;
+                                    //}
+                                    //bootbox.alert({
+                                    //    title: msg.title,
+                                    //    message: msg.desc + '<br>' + (msg.code ? '<span class="hx-en hx-errcode small">Code: ' + msg.code + '</span>' : ""),
+                                    //    buttons: { 'ok': { label: 'OK' } }
+                                    //});
+                                }
+                            },
+                            error: function(err) {
+                                hx.hxShowConnectionError();
+                            },
+                            complete: function() {
+                                App.unblockUI(nsSchedulerElmId);
+                                //enable reload btn after some moments
+                                // enableBtnReloadRepositoryWithTimer(5000);
+                            }
+                        });
+                        //return '[ { "eventDt":"09/11/2016T12:40", "contentPacks":[ { "cpId":100, "cpIndex":0, "cpTitle":"sample 1", "schedules":[ { "schId":"10", "destId":100 }, { "schId":"11", "destId":200 }, { "schId":"12", "destId":300 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":101, "cpIndex":1, "cpTitle":"sample 2", "schedules":[ { "schId":"13", "destId":100 } ] }, { "cpId":102, "cpIndex":2, "cpTitle":"sample 3", "schedules":[ { "schId":"14", "destId":100 }, { "schId":"15", "destId":300 } ], "extra":{"type":"photo","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":103, "cpIndex":3, "cpTitle":"sample 3", "schedules":[ { "schId":"16", "destId":100 }, { "schId":"17", "destId":200 }, { "schId":"18", "destId":300 } ], "extra":{"type":"video","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] }, { "eventDt":"10/11/2016T12:40", "contentPacks":[ { "cpId":100, "cpIndex":0, "cpTitle":"sample 1", "schedules":[ { "schId":"19", "destId":100 }, { "schId":"20", "destId":200 }, { "schId":"21", "destId":300 } ], "extra":{"type":"audio","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":101, "cpIndex":1, "cpTitle":"sample 2", "schedules":[ { "schId":"22", "destId":100 } ], "extra":{"type":"photo","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":102, "cpIndex":2, "cpTitle":"sample 3", "schedules":[ { "schId":"23", "destId":100 }, { "schId":"24", "destId":300 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":103, "cpIndex":3, "cpTitle":"sample 3", "schedules":[ { "schId":"25", "destId":100 }, { "schId":"26", "destId":200 }, { "schId":"27", "destId":300 } ], "extra":{"type":"location","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] } , { "eventDt":"11/11/2016T12:40", "contentPacks":[ { "cpId":110, "cpIndex":0, "cpTitle":"sample 110", "schedules":[ { "schId":"28", "destId":100 }, { "schId":"29", "destId":200 }, { "schId":"30", "destId":300 } ], "extra":{"type":"contact","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":111, "cpIndex":1, "cpTitle":"sample 111", "schedules":[ { "schId":"31", "destId":100 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":112, "cpIndex":2, "cpTitle":"sample 112", "schedules":[ { "schId":"32", "destId":100 }, { "schId":"33", "destId":300 } ], "extra":{"type":"video","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":113, "cpIndex":3, "cpTitle":"sample 113", "schedules":[ { "schId":"34", "destId":100 }, { "schId":"35", "destId":200 }, { "schId":"36", "destId":300 } ], "extra":{"type":"document","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] } ]';
+                    }
+
+                    function saveSchedullerData(nsScheduler, brandId) {
+                        //return '[{"dt":"15/01/2016T10:15","contentpacks":[{"id":10,"schguid":"H54K6871","title":"A1"},{"id":11,"schguid":"T48Jk00","title":"A2"},{"id":12,"schguid":"masd178","title":"A3"}]},{"dt":"16/02/2016T14:40","contentpacks":[{"id":13,"schguid":"XTJ178","title":"B1"}]},{"dt":"16/10/2016T21:05","contentpacks":[{"id":14,"schguid":"gd54213d","title":"C1"},{"id":15,"schguid":"QD88RE","title":"C2"}]}]';
+                        var schData = { brandId: brandId, added: nsScheduler.data.added, modified: nsScheduler.data.modified, removed: nsScheduler.data.removed }
+                        schData = convertDatesToIsoFormat(nsScheduler, schData);
+                        var curEventStrDt = nsScheduler.getStrDtOfCurrentEvent();
+
+                        $.ajax({
+                            url: urSaveSechduledContents,
+                            data: schData,
+                            dataType: 'json',
+                            type: 'POST',
+                            beforeSend: function(xhr, opts) {
+                                App.blockUI({
+                                    target: nsSchedulerElmId,
+                                    animate: true
+                                });
+                                //window.setTimeout(function () {
+                                //    App.unblockUI(nsSchedulerElmId);
+                                //}, 20000);
+                            },
+                            success: function (data) {
+                                showLogs(data.logs, data.nowUserDt);
+                                if (data.reload) {
+                                    loadSchedullerData(nsScheduler, brandId, curEventStrDt);
+                                }
+                                hx.updateHeaderPostBalance();
+                                //if (!data.logs || data.logs.length == 0)
+                                //{
+                                    //bootbox.alert({
+                                    //    size: 'small',
+                                    //    message: '<h1 class="text-center font-green">' + twemoji.parse("Successfully Done") + '</h1>' +
+                                    //        '<div class="" style="margin-top: 60px;"><i class="fa fa-check-circle-o fa-5 font-green" style="margin: 0 auto !important; width: 155px; height: 70px; margin-top: 60px; display: block; font-size: 11em;"><i></div>',
+                                    //    buttons: { 'ok': { label: 'OK', className: 'green btn-block' } }
+                                    //});
+                                //}
+                                //else
+                                //{
+                                    
+                                    //var msg = { code: -1, title: null, desc: "An error occurred when saving the schedules! Please try again after several minutes." };
+                                    //if (data.replyMsg) {
+                                    //    msg = data.replyMsg;
+                                    //}
+                                    //bootbox.alert({
+                                    //    title: msg.title,
+                                    //    message: msg.desc + '<br>' + (msg.code ? '<span class="hx-en hx-errcode small">Code: ' + msg.code + '</span>' : ""),
+                                    //    buttons: { 'ok': { label: 'OK' } }
+                                    //});
+                                    //bootbox.alert(hx.drawBootboxInner("error", msg.code, msg.title, msg.desc));
+                                //}
+                            },
+                            error: function(err) {
+                                hx.hxShowConnectionError();
+                            },
+                            complete: function() {
+                                App.unblockUI(nsSchedulerElmId);
+                                //enable reload btn after some moments
+                                // enableBtnReloadRepositoryWithTimer(5000);
+                            }
+
+                            //return '[ { "eventDt":"09/11/2016T12:40", "contentPacks":[ { "cpId":100, "cpIndex":0, "cpTitle":"sample 1", "schedules":[ { "schId":"10", "destId":100 }, { "schId":"11", "destId":200 }, { "schId":"12", "destId":300 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":101, "cpIndex":1, "cpTitle":"sample 2", "schedules":[ { "schId":"13", "destId":100 } ] }, { "cpId":102, "cpIndex":2, "cpTitle":"sample 3", "schedules":[ { "schId":"14", "destId":100 }, { "schId":"15", "destId":300 } ], "extra":{"type":"photo","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":103, "cpIndex":3, "cpTitle":"sample 3", "schedules":[ { "schId":"16", "destId":100 }, { "schId":"17", "destId":200 }, { "schId":"18", "destId":300 } ], "extra":{"type":"video","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] }, { "eventDt":"10/11/2016T12:40", "contentPacks":[ { "cpId":100, "cpIndex":0, "cpTitle":"sample 1", "schedules":[ { "schId":"19", "destId":100 }, { "schId":"20", "destId":200 }, { "schId":"21", "destId":300 } ], "extra":{"type":"audio","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":101, "cpIndex":1, "cpTitle":"sample 2", "schedules":[ { "schId":"22", "destId":100 } ], "extra":{"type":"photo","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":102, "cpIndex":2, "cpTitle":"sample 3", "schedules":[ { "schId":"23", "destId":100 }, { "schId":"24", "destId":300 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":103, "cpIndex":3, "cpTitle":"sample 3", "schedules":[ { "schId":"25", "destId":100 }, { "schId":"26", "destId":200 }, { "schId":"27", "destId":300 } ], "extra":{"type":"location","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] } , { "eventDt":"11/11/2016T12:40", "contentPacks":[ { "cpId":110, "cpIndex":0, "cpTitle":"sample 110", "schedules":[ { "schId":"28", "destId":100 }, { "schId":"29", "destId":200 }, { "schId":"30", "destId":300 } ], "extra":{"type":"contact","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":111, "cpIndex":1, "cpTitle":"sample 111", "schedules":[ { "schId":"31", "destId":100 } ], "extra":{"type":"text","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":112, "cpIndex":2, "cpTitle":"sample 112", "schedules":[ { "schId":"32", "destId":100 }, { "schId":"33", "destId":300 } ], "extra":{"type":"video","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} }, { "cpId":113, "cpIndex":3, "cpTitle":"sample 113", "schedules":[ { "schId":"34", "destId":100 }, { "schId":"35", "destId":200 }, { "schId":"36", "destId":300 } ], "extra":{"type":"document","cpFounder":"مدیر سیستم","sendDt":"2016-10-12T21:40:19.643"} } ] } ]';
+                        });
+                    }
+
+                    function getHeavyData() {
+                        return '';
+                    }
+
+                    function convertDatesToIsoFormat(nsScheduler, schData) {
+                        var myData = jQuery.extend(true, {}, schData);
+                        $.each(myData.added, function(i, item) {
+                            item.eventDt = toLocalIso(nsScheduler, item.eventDt);
+                        });
+                        $.each(myData.modified, function(i, item) {
+                            item.eventDt = toLocalIso(nsScheduler, item.eventDt);
+                        });
+                        $.each(myData.removed, function(i, item) {
+                            item.eventDt = toLocalIso(nsScheduler, item.eventDt);
+                        });
+                        return myData;
+                    }
+
+                    //این تابع فرمت زمان را ایزو میکند اما در عین حال تایمزون آن را در ساعت دخالت میدهد تا تابع ایزو آن را به ساعت جهانی تبدیل نکند و ساعت نهایی ساعت لوکال باشد
+                    function toLocalIso(nsScheduler, eventDt) {
+                        var targetDt = nsScheduler.parseDt(eventDt);
+                        var tzoffset = targetDt.getTimezoneOffset() * 60000;
+                        return (new Date(targetDt - tzoffset)).toISOString().slice(0, -1);
+                    }
+
+                    // $('#toggle-one').bootstrapToggle();
+
+
+                </script>
+             </text>, 
+        AppConf.Consts.MinifyJsOfView
+        //false
+        );
+    }
+}
